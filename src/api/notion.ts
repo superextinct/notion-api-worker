@@ -114,3 +114,27 @@ export const fetchBlocks = async (
     notionToken,
   });
 };
+
+export const fetchSignedUrl = async (
+  blockId: string,
+  fileUrl: string,
+  notionToken?: string
+) => {
+  const signedUrls =  await fetchNotionData({
+    resource: "getSignedFileUrls",
+    body: {
+      "urls": [
+        {
+          "url": decodeURIComponent(fileUrl),
+          "permissionRecord": {
+            "table": "block",
+            "id": blockId
+          }
+        }
+      ]
+    },
+    notionToken,
+  });
+
+  return signedUrls;
+}
