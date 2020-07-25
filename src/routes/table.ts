@@ -1,32 +1,22 @@
-import { Params } from "tiny-request-router";
 import { fetchPageById, fetchTableData, fetchNotionUsers } from "../api/notion";
 import { parsePageId, getNotionValue } from "../api/utils";
-import { RowContentType, CollectionType, RowType } from "../api/types";
+import {
+  RowContentType,
+  CollectionType,
+  RowType,
+  HandlerRequest,
+} from "../api/types";
 import { createResponse } from "../response";
 
-export async function tableRoute(params: Params, notionToken?: string) {
-  const pageId = parsePageId(params.pageId);
-  const page = await fetchPageById(pageId, notionToken);
-
-  if (!page.recordMap.collection)
-    return createResponse(
-      JSON.stringify({ error: "No table found on Notion page: " + pageId }),
-      {},
-      401
-    );
-
-  const collection: CollectionType = Object.keys(page.recordMap.collection).map(
-    k => page.recordMap.collection[k]
-  )[0];
-  const collectionView: {
-    value: { id: CollectionType["value"]["id"] };
-  } = Object.keys(page.recordMap.collection_view).map(
-    k => page.recordMap.collection_view[k]
-  )[0];
-
+export const getTableData = async (
+  collection: CollectionType,
+  collectionViewId: string,
+  notionToken?: string,
+  raw?: boolean
+) => {
   const table = await fetchTableData(
     collection.value.id,
-    collectionView.value.id,
+    collectionViewId,
     notionToken
   );
 
@@ -38,7 +28,7 @@ export async function tableRoute(params: Params, notionToken?: string) {
   );
 
   const tableData = tableArr.filter(
-    b =>
+    (b) =>
       b.value && b.value.properties && b.value.parent_id === collection.value.id
   );
 
@@ -53,15 +43,45 @@ export async function tableRoute(params: Params, notionToken?: string) {
       const val = td.value.properties[key];
       if (val) {
         const schema = collectionRows[key];
-        row[schema.name] = getNotionValue(val, schema.type);
-        if (schema.type === "person") {
+        row[schema.name] = raw ? val : getNotionValue(val, schema.type);
+        if (schema.type === "person" && row[schema.name]) {
           const users = await fetchNotionUsers(row[schema.name] as string[]);
-          row[schema.name] = users;
+          row[schema.name] = users as any;
         }
       }
     }
     rows.push(row);
   }
+
+  return { rows, schema: collectionRows };
+};
+
+export async function tableRoute(req: HandlerRequest) {
+  const pageId = parsePageId(req.params.pageId);
+  const page = await fetchPageById(pageId!, req.notionToken);
+
+  if (!page.recordMap.collection)
+    return createResponse(
+      JSON.stringify({ error: "No table found on Notion page: " + pageId }),
+      {},
+      401
+    );
+
+  const collection = Object.keys(page.recordMap.collection).map(
+    (k) => page.recordMap.collection[k]
+  )[0];
+
+  const collectionView: {
+    value: { id: CollectionType["value"]["id"] };
+  } = Object.keys(page.recordMap.collection_view).map(
+    (k) => page.recordMap.collection_view[k]
+  )[0];
+
+  const { rows } = await getTableData(
+    collection,
+    collectionView.value.id,
+    req.notionToken
+  );
 
   return createResponse(rows);
 }

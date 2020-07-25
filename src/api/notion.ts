@@ -1,4 +1,11 @@
-import { JSONData } from "./types";
+import {
+  JSONData,
+  NotionUserType,
+  LoadPageChunkData,
+  CollectionData,
+  NotionSearchParamsType,
+  NotionSearchResultsType,
+} from "./types";
 
 const NOTION_API = "https://www.notion.so/api/v3";
 
@@ -33,7 +40,7 @@ const fetchNotionData = async <T extends any>({
 };
 
 export const fetchPageById = async (pageId: string, notionToken?: string) => {
-  const res = await fetchNotionData({
+  const res = await fetchNotionData<LoadPageChunkData>({
     resource: "loadPageChunk",
     body: {
       pageId,
@@ -62,7 +69,7 @@ export const fetchTableData = async (
   collectionViewId: string,
   notionToken?: string
 ) => {
-  const table = await fetchNotionData({
+  const table = await fetchNotionData<CollectionData>({
     resource: "queryCollection",
     body: {
       collectionId,
@@ -77,31 +84,34 @@ export const fetchTableData = async (
 export const fetchNotionUsers = async (
   userIds: string[],
   notionToken?: string
-): Promise<{ id: string; full_name: string }[]> => {
-  const users = await fetchNotionData({
+) => {
+  const users = await fetchNotionData<{ results: NotionUserType[] }>({
     resource: "getRecordValues",
     body: {
-      requests: userIds.map(id => ({ id, table: "notion_user" })),
+      requests: userIds.map((id) => ({ id, table: "notion_user" })),
     },
     notionToken,
   });
-  return users.results.map((u: any) => {
-    const user = {
-      id: u.value.id,
-      firstName: u.value.given_name,
-      lastLame: u.value.family_name,
-      fullName: u.value.given_name + " " + u.value.family_name,
-      profilePhoto: u.value.profile_photo,
-    };
-    return user;
-  });
+  if (users && users.results) {
+    return users.results.map((u) => {
+      const user = {
+        id: u.value.id,
+        firstName: u.value.given_name,
+        lastLame: u.value.family_name,
+        fullName: u.value.given_name + " " + u.value.family_name,
+        profilePhoto: u.value.profile_photo,
+      };
+      return user;
+    });
+  }
+  return [];
 };
 
 export const fetchBlocks = async (
   blockList: string[],
   notionToken?: string
 ) => {
-  return await fetchNotionData({
+  return await fetchNotionData<LoadPageChunkData>({
     resource: "syncRecordValues",
     body: {
       recordVersionMap: {
@@ -138,3 +148,33 @@ export const fetchSignedUrl = async (
 
   return signedUrls;
 }
+export const fetchNotionSearch = async (
+  params: NotionSearchParamsType,
+  notionToken?: string
+) => {
+  // TODO: support other types of searches
+  return fetchNotionData<{ results: NotionSearchResultsType }>({
+    resource: "search",
+    body: {
+      type: "BlocksInAncestor",
+      source: "quick_find_public",
+      ancestorId: params.ancestorId,
+      filters: {
+        isDeletedOnly: false,
+        excludeTemplates: true,
+        isNavigableOnly: true,
+        requireEditPermissions: false,
+        ancestors: [],
+        createdBy: [],
+        editedBy: [],
+        lastEditedTime: {},
+        createdTime: {},
+        ...params.filters,
+      },
+      sort: "Relevance",
+      limit: params.limit || 20,
+      query: params.query,
+    },
+    notionToken,
+  });
+};

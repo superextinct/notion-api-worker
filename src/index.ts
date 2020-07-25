@@ -1,24 +1,33 @@
 import {} from "@cloudflare/workers-types";
-import { Router, Method, Params } from "tiny-request-router";
+import { Router, Method } from "tiny-request-router";
 
 import { pageRoute } from "./routes/page";
 import { tableRoute } from "./routes/table";
 import { userRoute } from "./routes/user";
 import { filesRoute } from "./routes/files";
+import { searchRoute } from "./routes/search";
 import { createResponse } from "./response";
+import { getCacheKey } from "./get-cache-key";
+import * as types from "./api/types";
 
 export type Handler = (
-  params: Params,
-  notionToken?: string
+  req: types.HandlerRequest
 ) => Promise<Response> | Response;
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD, POST, OPTIONS",
+};
 
 const router = new Router<Handler>();
 
-router.options("*", () => new Response("", { headers: {} }));
+router.options("*", () => new Response(null, { headers: corsHeaders }));
 router.get("/v1/page/:pageId", pageRoute);
 router.get("/v1/table/:pageId", tableRoute);
 router.get("/v1/user/:userId", userRoute);
 router.get("/v1/files/:blockId/:fileUrl(.*)", filesRoute);
+router.get("/v1/search", searchRoute);
 
 router.get("*", async () =>
   createResponse(
@@ -37,7 +46,7 @@ const NOTION_API_TOKEN =
 
 const handleRequest = async (fetchEvent: FetchEvent): Promise<Response> => {
   const request = fetchEvent.request;
-  const { pathname } = new URL(request.url);
+  const { pathname, searchParams } = new URL(request.url);
   const notionToken =
     NOTION_API_TOKEN ||
     (request.headers.get("Authorization") || "").split("Bearer ")[1] ||
@@ -49,19 +58,27 @@ const handleRequest = async (fetchEvent: FetchEvent): Promise<Response> => {
     return new Response("Endpoint not found.", { status: 404 });
   }
 
-  const cacheKey = request.url;
+  const cacheKey = getCacheKey(request);
   let response;
-  try {
-    const cachedResponse = await cache.match(cacheKey);
-    if (cachedResponse) {
-      response = cachedResponse;
-    }
-  } catch (err) {}
+
+  if (cacheKey) {
+    try {
+      response = await cache.match(cacheKey);
+    } catch (err) {}
+  }
 
   const getResponseAndPersist = async () => {
-    const res = await match.handler(match.params, notionToken);
+    const res = await match.handler({
+      request,
+      searchParams,
+      params: match.params,
+      notionToken,
+    });
 
-    await cache.put(cacheKey, res.clone());
+    if (cacheKey) {
+      await cache.put(cacheKey, res.clone());
+    }
+
     return res;
   };
 

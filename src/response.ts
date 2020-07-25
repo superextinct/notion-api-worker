@@ -1,7 +1,7 @@
 import { JSONData } from "./api/types";
 
 export const createResponse = (
-  body: JSONData,
+  body: JSONData | any,
   headers?: { [key: string]: string },
   statusCode?: number
 ) => {
@@ -10,6 +10,7 @@ export const createResponse = (
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Content-Type": "application/json",
       ...headers,
     },
   });

@@ -1,3 +1,5 @@
+import { Params } from "tiny-request-router";
+
 type BoldFormatType = ["b"];
 type ItalicFormatType = ["i"];
 type StrikeFormatType = ["s"];
@@ -35,7 +37,8 @@ export type ColumnType =
   | "title"
   | "multi_select"
   | "number"
-  | "relation";
+  | "relation"
+  | "file";
 
 export type ColumnSchemaType = {
   name: string;
@@ -50,10 +53,13 @@ export type RowContentType =
   | number
   | string[]
   | { title: string; id: string }
-  | UserType[];
+  | UserType[]
+  | DecorationType[]
+  | { name: string; url: string }[];
 
 export interface BaseValueType {
   id: string;
+  type: string;
   version: number;
   created_time: number;
   last_edited_time: number;
@@ -96,3 +102,103 @@ export type JSONData =
   | string
   | JSONData[]
   | { [prop: string]: JSONData };
+
+export type BlockMapType = {
+  [key: string]: BlockType;
+};
+
+export interface NotionUserType {
+  role: string;
+  value: {
+    id: string;
+    version: number;
+    email: string;
+    given_name: string;
+    family_name: string;
+    profile_photo: string;
+    onboarding_completed: boolean;
+    mobile_onboarding_completed: boolean;
+  };
+}
+export interface BlockType {
+  role: string;
+  value: BaseValueType;
+}
+
+export interface RecordMapType {
+  block: BlockMapType;
+  notion_user: {
+    [key: string]: NotionUserType;
+  };
+  collection: {
+    [key: string]: CollectionType;
+  };
+  collection_view: {
+    [key: string]: {
+      value: {
+        id: string;
+        type: CollectionViewType;
+      };
+    };
+  };
+}
+
+export interface LoadPageChunkData {
+  recordMap: RecordMapType;
+  cursor: {
+    stack: any[];
+  };
+}
+
+type CollectionViewType = "table" | "gallery";
+
+export interface CollectionData {
+  recordMap: {
+    block: { [key: string]: RowType };
+    collection_view: {
+      [key: string]: {
+        value: { type: CollectionViewType };
+      };
+    };
+  };
+  result: {
+    blockIds: string[];
+  };
+}
+
+export interface NotionSearchParamsType {
+  ancestorId: string;
+  query: string;
+  filters?: {
+    isDeletedOnly: boolean;
+    excludeTemplates: boolean;
+    isNavigableOnly: boolean;
+    requireEditPermissions: boolean;
+  };
+  limit?: number;
+}
+
+export interface NotionSearchResultType {
+  id: string;
+  isNavigable: boolean;
+  score: number;
+  highlight: {
+    pathText: string;
+    text: string;
+  };
+}
+
+export interface NotionSearchResultsType {
+  recordMap: {
+    block: { [key: string]: RowType };
+  };
+  results: NotionSearchResultType[];
+  total: number;
+}
+
+export interface HandlerRequest {
+  params: Params;
+  searchParams: URLSearchParams;
+  request: Request;
+  notionToken?: string;
+}
